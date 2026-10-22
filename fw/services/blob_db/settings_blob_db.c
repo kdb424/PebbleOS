@@ -153,6 +153,9 @@ static const char *s_syncable_notif_prefs[] = {
   "dndTouchBacklight",
   "dndNotificationBacklight",
   "dndAutoDismiss",
+  "notifCooldownMode",
+  "notifCooldownScope",
+  "notifCooldownSecs",
 };
 
 static const size_t s_num_syncable_notif_prefs = ARRAY_LENGTH(s_syncable_notif_prefs);

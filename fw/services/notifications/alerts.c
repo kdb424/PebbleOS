@@ -10,6 +10,7 @@
 #include <pbl/services/notifications/alerts_preferences_private.h>
 #include <pbl/services/notifications/alerts_private.h>
 #include <pbl/services/notifications/do_not_disturb.h>
+#include <pbl/services/notifications/notification_cooldown.h>
 
 #include <kernel/low_power.h>
 
@@ -134,6 +135,7 @@ void alerts_set_notification_window_timeout_ms(uint32_t timeout_ms) {
 }
 
 void alerts_init() {
+  notification_cooldown_init();
   alerts_preferences_init();
   do_not_disturb_init();
   vibe_intensity_init();

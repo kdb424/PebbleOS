@@ -7,6 +7,7 @@
 #include <pbl/kernel/fatal.h>
 #include <pbl/kernel/mutex.h>
 #include <pbl/services/notifications/alerts_preferences.h>
+#include <pbl/services/notifications/notification_cooldown.h>
 #include <pbl/services/notifications/alerts_preferences_private.h>
 #include <pbl/services/notifications/do_not_disturb.h>
 #include <pbl/services/settings/settings_file.h>
@@ -107,6 +108,13 @@ static NotificationStatusBarStyle s_notification_status_bar_style =
     NotificationStatusBarStyle_Default;
 
 #define PREF_KEY_NOTIF_TEXT_SIZE  "notifTextSize"
+
+#define PREF_KEY_NOTIF_COOLDOWN_MODE "notifCooldownMode"
+static uint8_t s_notif_cooldown_mode = 0;
+#define PREF_KEY_NOTIF_COOLDOWN_SCOPE "notifCooldownScope"
+static uint8_t s_notif_cooldown_scope = 0;
+#define PREF_KEY_NOTIF_COOLDOWN_SECS "notifCooldownSecs"
+static uint32_t s_notif_cooldown_secs = 60;
 #define SHELL_PREF_KEY_TEXT_STYLE "textStyle"
 static PreferredContentSize s_notification_content_size = PreferredContentSizeDefault;
 
@@ -381,6 +389,9 @@ void alerts_preferences_init(void) {
   RESTORE_PREF(PREF_KEY_NOTIF_GROUPING_RANGE, s_notification_grouping_range);
   RESTORE_PREF(PREF_KEY_NOTIF_STATUS_BAR_STYLE, s_notification_status_bar_style);
   RESTORE_PREF(PREF_KEY_NOTIF_TEXT_SIZE, s_notification_content_size);
+  RESTORE_PREF(PREF_KEY_NOTIF_COOLDOWN_MODE, s_notif_cooldown_mode);
+  RESTORE_PREF(PREF_KEY_NOTIF_COOLDOWN_SCOPE, s_notif_cooldown_scope);
+  RESTORE_PREF(PREF_KEY_NOTIF_COOLDOWN_SECS, s_notif_cooldown_secs);
   RESTORE_PREF(PREF_KEY_DND_AUTO_DISMISS, s_dnd_auto_dismiss);
 #undef RESTORE_PREF
 
@@ -406,6 +417,10 @@ void alerts_preferences_init(void) {
                                        orig_vibe_score_hourly, orig_vibe_score_on_disconnect);
 
   settings_file_close(&file);
+
+  notification_cooldown_configure((NotifCooldownMode)s_notif_cooldown_mode,
+                                  (NotifCooldownScope)s_notif_cooldown_scope,
+                                  s_notif_cooldown_secs);
 }
 
 // Convenience macro for setting a string key to a non-pointer value.
@@ -470,6 +485,39 @@ bool alerts_preferences_get_notification_backlight(void) {
 void alerts_preferences_set_notification_backlight(bool enable) {
   s_notification_backlight = enable;
   SET_PREF(PREF_KEY_NOTIF_BACKLIGHT, s_notification_backlight);
+}
+
+NotifCooldownMode alerts_preferences_get_notif_cooldown_mode(void) {
+  return (NotifCooldownMode)s_notif_cooldown_mode;
+}
+void alerts_preferences_set_notif_cooldown_mode(NotifCooldownMode mode) {
+  s_notif_cooldown_mode = (uint8_t)mode;
+  SET_PREF(PREF_KEY_NOTIF_COOLDOWN_MODE, s_notif_cooldown_mode);
+  notification_cooldown_configure((NotifCooldownMode)s_notif_cooldown_mode,
+                                  (NotifCooldownScope)s_notif_cooldown_scope,
+                                  s_notif_cooldown_secs);
+}
+
+NotifCooldownScope alerts_preferences_get_notif_cooldown_scope(void) {
+  return (NotifCooldownScope)s_notif_cooldown_scope;
+}
+void alerts_preferences_set_notif_cooldown_scope(NotifCooldownScope scope) {
+  s_notif_cooldown_scope = (uint8_t)scope;
+  SET_PREF(PREF_KEY_NOTIF_COOLDOWN_SCOPE, s_notif_cooldown_scope);
+  notification_cooldown_configure((NotifCooldownMode)s_notif_cooldown_mode,
+                                  (NotifCooldownScope)s_notif_cooldown_scope,
+                                  s_notif_cooldown_secs);
+}
+
+uint32_t alerts_preferences_get_notif_cooldown_secs(void) {
+  return s_notif_cooldown_secs ? s_notif_cooldown_secs : 60;
+}
+void alerts_preferences_set_notif_cooldown_secs(uint32_t secs) {
+  s_notif_cooldown_secs = secs;
+  SET_PREF(PREF_KEY_NOTIF_COOLDOWN_SECS, s_notif_cooldown_secs);
+  notification_cooldown_configure((NotifCooldownMode)s_notif_cooldown_mode,
+                                  (NotifCooldownScope)s_notif_cooldown_scope,
+                                  s_notif_cooldown_secs);
 }
 
 NotificationGroupingRange alerts_preferences_get_notification_grouping_range(void) {
@@ -793,6 +841,9 @@ void alerts_preferences_handle_blob_db_event(PebbleBlobDBEvent *event) {
   RELOAD_IF_MATCH(PREF_KEY_NOTIF_DESIGN_STYLE, s_notification_alternative_design);
   RELOAD_IF_MATCH(PREF_KEY_NOTIF_VIBE_DELAY, s_notification_vibe_delay);
   RELOAD_IF_MATCH(PREF_KEY_NOTIF_BACKLIGHT, s_notification_backlight);
+  RELOAD_IF_MATCH(PREF_KEY_NOTIF_COOLDOWN_MODE, s_notif_cooldown_mode);
+  RELOAD_IF_MATCH(PREF_KEY_NOTIF_COOLDOWN_SCOPE, s_notif_cooldown_scope);
+  RELOAD_IF_MATCH(PREF_KEY_NOTIF_COOLDOWN_SECS, s_notif_cooldown_secs);
   RELOAD_IF_MATCH(PREF_KEY_NOTIF_GROUPING_RANGE, s_notification_grouping_range);
   RELOAD_IF_MATCH(PREF_KEY_NOTIF_STATUS_BAR_STYLE, s_notification_status_bar_style);
   RELOAD_IF_MATCH(PREF_KEY_NOTIF_TEXT_SIZE, s_notification_content_size);

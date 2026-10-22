@@ -1064,11 +1064,17 @@ static void prv_handle_ns_notification(uint32_t length, const uint8_t *notificat
     properties |= ANCSProperty_IncomingCall;
   } else if (nsnotification->category_id == CategoryIDVoicemail) {
     properties |= ANCSProperty_VoiceMail;
+  } else if (nsnotification->category_id == CategoryIDSchedule) {
+    properties |= ANCSProperty_Schedule;
   }
 
   // Handle the EventFlags
   if (nsnotification->event_flags & EventFlagMultiMedia) {
     properties |= ANCSProperty_MultiMedia;
+  }
+
+  if (nsnotification->event_flags & EventFlagImportant) {
+    properties |= ANCSProperty_Important;
   }
 
   if (s_ancs_client->version >= ANCSVersion_iOS9OrNewer) {

@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
+#include <pbl/services/notifications/notification_cooldown.h>
 
 #include <pbl/services/notifications/alerts_private.h>
 #include <pbl/services/notifications/do_not_disturb.h>
@@ -120,6 +121,15 @@ bool alerts_preferences_get_notification_backlight(void);
  * @param enable true to enable.
  */
 void alerts_preferences_set_notification_backlight(bool enable);
+
+NotifCooldownMode alerts_preferences_get_notif_cooldown_mode(void);
+void alerts_preferences_set_notif_cooldown_mode(NotifCooldownMode mode);
+
+NotifCooldownScope alerts_preferences_get_notif_cooldown_scope(void);
+void alerts_preferences_set_notif_cooldown_scope(NotifCooldownScope scope);
+
+uint32_t alerts_preferences_get_notif_cooldown_secs(void);
+void alerts_preferences_set_notif_cooldown_secs(uint32_t secs);
 
 /** @brief Age range within which notifications from the same sender are grouped. */
 typedef enum {

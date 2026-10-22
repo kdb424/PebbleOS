@@ -22,6 +22,7 @@
 #include <pbl/services/imaging.h>
 #include <pbl/services/light.h>
 #include <pbl/services/notifications/alerts.h>
+#include <pbl/services/notifications/notification_cooldown.h>
 #include <pbl/services/notifications/alerts_preferences.h>
 #include <pbl/services/notifications/alerts_preferences_private.h>
 #include <pbl/services/notifications/alerts_private.h>
@@ -1549,19 +1550,48 @@ static void prv_do_notification_vibe(NotificationWindowData *data, Uuid *id) {
   if (!uuid_equal(&item->header.id, id)) {
     prv_log_notification_vibe("current item differs from requested", &item->header.id);
   }
+  // Notification cooldown: suppress vibe/backlight bursts (still stored/displayed).
+  char cooldown_key[128];
+  NotifCooldownScope scope = alerts_preferences_get_notif_cooldown_scope();
+  if (scope == NotifCooldownScopeEverything) {
+    snprintf(cooldown_key, sizeof(cooldown_key), "all");
+  } else {
+    const char *app = (const char *)attribute_get_string(&item->attr_list, AttributeIdAppName, "");
+    const char *title = (const char *)attribute_get_string(&item->attr_list, AttributeIdTitle, "");
+    if (scope == NotifCooldownScopePerApp) {
+      snprintf(cooldown_key, sizeof(cooldown_key), "app:%s", app[0] ? app : "unknown");
+    } else {
+      snprintf(cooldown_key, sizeof(cooldown_key), "conv:%s|%s", app[0] ? app : "unknown", title);
+    }
+  }
+  if (!notification_cooldown_should_buzz(cooldown_key)) {
+    prv_log_notification_vibe("skipped: cooldown", id);
+    return;
+  }
+
   bool did_vibrate = false;
   Uint32List *vibeDurations =
       attribute_get_uint32_list(&item->attr_list, AttributeIdVibrationPattern);
   if (vibeDurations && vibeDurations->num_values > 0) {
-    VibePattern patt;
+    // A custom pattern with zero total duration (e.g. "No Vibration") must not
+    // start the vibration holdoff, otherwise real vibrations get skipped.
+    uint32_t total_duration = 0;
+    for (uint16_t i = 0; i < vibeDurations->num_values; i++) {
+      total_duration += vibeDurations->values[i];
+    }
+    if (total_duration > 0) {
+      VibePattern patt;
 
-    PBL_LOG_DBG("Notification vibe: custom pattern, %" PRIu16 " segments",
-                vibeDurations->num_values);
+      PBL_LOG_DBG("Notification vibe: custom pattern, %" PRIu16 " segments",
+                  vibeDurations->num_values);
 
-    patt.durations = vibeDurations->values;
-    patt.num_segments = vibeDurations->num_values;
-    vibes_enqueue_custom_pattern(patt);
-    did_vibrate = true;
+      patt.durations = vibeDurations->values;
+      patt.num_segments = vibeDurations->num_values;
+      vibes_enqueue_custom_pattern(patt);
+      did_vibrate = true;
+    } else {
+      prv_log_notification_vibe("skipped: zero-length custom pattern", id);
+    }
   } else {
     VibeScore *score = vibe_client_get_score(VibeClient_Notifications);
     if (score) {
@@ -1578,6 +1608,7 @@ static void prv_do_notification_vibe(NotificationWindowData *data, Uuid *id) {
   // Timestamp set after call to vibrate since if something fails,
   // its better to have no vibe blocking then vibe blocking and no vibrations.
   if (did_vibrate) {
+    notification_cooldown_record_buzz(cooldown_key);
     alerts_set_notification_vibe_timestamp();
   }
 }
@@ -1652,7 +1683,24 @@ static void prv_handle_notification_added_common(Uuid *id, NotificationType type
     }
   }
 
-  if (alerts_should_enable_backlight_for_type(prv_alert_type_for_notification_type(type))) {
+  // Derive cooldown key (same as vibe) to suppress backlight during cooldown.
+  char cooldown_key_bl[128];
+  NotifCooldownScope scope_bl = alerts_preferences_get_notif_cooldown_scope();
+  if (scope_bl == NotifCooldownScopeEverything) {
+    snprintf(cooldown_key_bl, sizeof(cooldown_key_bl), "all");
+  } else {
+    TimelineItem *bl_item = prv_get_current_notification(data);
+    const char *app = bl_item ? (const char *)attribute_get_string(&bl_item->attr_list, AttributeIdAppName, "") : "";
+    const char *title = bl_item ? (const char *)attribute_get_string(&bl_item->attr_list, AttributeIdTitle, "") : "";
+    if (scope_bl == NotifCooldownScopePerApp) {
+      snprintf(cooldown_key_bl, sizeof(cooldown_key_bl), "app:%s", app[0] ? app : "unknown");
+    } else {
+      snprintf(cooldown_key_bl, sizeof(cooldown_key_bl), "conv:%s|%s", app[0] ? app : "unknown", title);
+    }
+  }
+
+  if (alerts_should_enable_backlight_for_type(prv_alert_type_for_notification_type(type)) &&
+      !notification_cooldown_is_suppressed(cooldown_key_bl)) {
     // Check if we should delay the backlight until the animation completes (same as vibe delay)
     if (alerts_preferences_get_notification_vibe_delay() && data->peek_layer) {
       data->pending_backlight = true;
